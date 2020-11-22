@@ -4,7 +4,9 @@ const fetch = require("node-fetch");
 
 // const app = express();
 
-const base_url = "https://interview-api.sbly.com/ad-insights?";
+const metricsBaseUrl = "https://interview-api.sbly.com/ad-insights?";
+const budgetsBaseIrl = "https://interview-api.sbly.com/ad/";
+const accessToken = "?accessToken=SHAREABLY_SECRET_TOKEN";
 
 let dates = [
   "2020-01-01",
@@ -38,29 +40,41 @@ async function fetchAdMetrics(url) {
 
 const params = createParams();
 async function buildInsights() {
-  ad_insights = {};
+  let adInsights = {};
   for (i in params) {
     const date = params[i].get("date").slice([-1]);
-    const url = base_url.concat(params[i].toString());
+    const url = metricsBaseUrl.concat(params[i].toString());
 
     try {
       const insights = await fetchAdMetrics(url);
 
       for (i in insights) {
-        if (!(insights[i].id in ad_insights)) {
-          ad_insights[insights[i].id] = {};
+        if (!(insights[i].id in adInsights)) {
+          adInsights[insights[i].id] = {};
         }
 
-        ad_insights[insights[i].id][date] = insights[i];
+        adInsights[insights[i].id][date] = insights[i];
       }
     } catch (err) {
       console.log(err);
     }
   }
-  return ad_insights;
+  return adInsights;
 }
 
-buildInsights().then((insights) => console.log(insights));
+async function addCurrBudget() {
+  let adInsights = await buildInsights();
+  let adIds = Object.keys(adInsights);
+
+  for (i in adIds) {
+    url = budgetsBaseIrl.concat(adIds[i], accessToken);
+    const budget = await fetchAdMetrics(url);
+    adInsights[adIds[i]]["curr_budget"] = budget.budget;
+  }
+  return adInsights;
+}
+
+addCurrBudget().then((insights) => console.log(insights));
 
 //   "ad_id": {
 //     "weighted_average_profit_margin": "int",
