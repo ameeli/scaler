@@ -62,6 +62,16 @@ async function buildInsights() {
   return adInsights;
 }
 
+async function fetchCurrBudget(ad_id) {
+  url = budgetsBaseIrl.concat(ad_id, accessToken);
+  try {
+    const budget = await fetchAdMetrics(url);
+  } catch (err) {
+    console.log(err);
+  }
+  return budget.budget;
+}
+
 function caculateMarginWeight(adId, adInsight) {
   const dates = Object.keys(adInsight).map(Number);
   const mostRecentPerfDate = Math.max(...dates);
@@ -81,43 +91,44 @@ function caculateMarginWeight(adId, adInsight) {
   return [profitMargins, weights];
 }
 
-async function computeNewBudget() {
+function caculateNewBudget(profitMargins, weights, currBudget) {
+  totalWeight = weights.reduce((a, b) => a + b, 0);
+  weightedMargins = [];
+
+  for (i = 0; i < weights.length; i++) {
+    weightedMargin = profitMargins[i] * (weights[i] / totalWeight);
+    weightedMargins.push(weightedMargin);
+  }
+
+  const weightedAverageProfitMargin = weightedMargins.reduce(
+    (a, b) => a + b,
+    0
+  );
+
+  const nextBudget =
+    Math.round((1 + weightedAverageProfitMargin) * currBudget * 100) / 100;
+
+  return nextBudget;
+}
+
+async function addNewBudget() {
   let adInsights = await buildInsights();
 
   for (ad in adInsights) {
     [profitMargins, weights] = caculateMarginWeight(ad, adInsights[ad]);
-    console.log(profitMargins, weights);
-    // // Calculate budget
-    // totalWeight = weights.reduce((a, b) => a + b, 0);
-    // weightedMargins = [];
-    // for (i = 0; i < weights.length; i++) {
-    //   weightedMargin = profitMargins[i] * (weights[i] / totalWeight);
-    //   weightedMargins.push(weightedMargin);
-    // }
 
-    // const currBudget = await fetchCurrBudget(ad);
-    // const weightedAverageProfitMargin = weightedMargins.reduce(
-    //   (a, b) => a + b,
-    //   0
-    // );
-    // const mostRecentProfitMargin = profitMargins.slice([-1]);
-    // let nextBudget =
-    //   Math.round((1 + weightedAverageProfitMargin) * currBudget * 100) / 100;
+    const mostRecentProfitMargin = profitMargins.slice([-1]);
+    const currBudget = await fetchCurrBudget(ad);
+    let nextBudget = caculateNewBudget(profitMargins, weights, currBudget);
 
-    // if (mostRecentProfitMargin > 0) {
-    //   nextBudget = Math.max(currBudget, nextBudget);
-    // }
+    if (mostRecentProfitMargin > 0) {
+      nextBudget = Math.max(currBudget, nextBudget);
+    }
 
-    // adInsights[ad]["recommenedBudget"] = nextBudget;
-    // adInsights[ad]["currentBudget"] = currBudget;
+    adInsights[ad]["recommenedBudget"] = nextBudget;
+    adInsights[ad]["currentBudget"] = currBudget;
   }
-  // return adInsights;
+  return adInsights;
 }
 
-computeNewBudget().then((insights) => console.log(insights));
-
-async function fetchCurrBudget(ad_id) {
-  url = budgetsBaseIrl.concat(ad_id, accessToken);
-  const budget = await fetchAdMetrics(url);
-  return budget.budget;
-}
+addNewBudget().then((insights) => console.log(insights));
