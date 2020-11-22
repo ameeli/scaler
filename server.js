@@ -115,6 +115,12 @@ function caculateNewBudget(profitMargins, weights, currBudget) {
   return [weightedAverageProfitMargin, nextBudget];
 }
 
+const formatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+});
+
 async function recommenedBudget() {
   let adInsights = await buildInsights();
   let adInsightsBudgets = [];
@@ -137,8 +143,8 @@ async function recommenedBudget() {
     adInsightBudget = {
       id: ad,
       weightedAverageProfitMargin: weightedAverageProfitMargin,
-      currentBudget: currBudget,
-      proposedBudget: proposedBudget,
+      currentBudget: formatter.format(currBudget),
+      proposedBudget: formatter.format(proposedBudget),
     };
     adInsightsBudgets.push(adInsightBudget);
   }
