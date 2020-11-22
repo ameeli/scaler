@@ -62,19 +62,62 @@ async function buildInsights() {
   return adInsights;
 }
 
-async function addCurrBudget() {
+async function computeNewBudget() {
   let adInsights = await buildInsights();
-  let adIds = Object.keys(adInsights);
 
-  for (i in adIds) {
-    url = budgetsBaseIrl.concat(adIds[i], accessToken);
-    const budget = await fetchAdMetrics(url);
-    adInsights[adIds[i]]["curr_budget"] = budget.budget;
+  for (ad in adInsights) {
+    // Calculate margin and weight
+    const dates = Object.keys(adInsights[ad]).map(Number);
+    const mostRecentPerfDate = Math.max(...dates);
+
+    let profitMargins = [];
+    let weights = [];
+
+    for (const [date, value] of Object.entries(adInsights[ad])) {
+      const profitMargin = (value.revenue - value.spend) / value.spend;
+      const weight =
+        Math.pow(0.5, mostRecentPerfDate - Number(date)) * value.spend;
+
+      profitMargins.push(profitMargin);
+      weights.push(weight);
+    }
+
+    // Calculate budget
+    totalWeight = weights.reduce((a, b) => a + b, 0);
+    weightedMargins = [];
+    for (i = 0; i < weights.length; i++) {
+      weightedMargin = profitMargins[i] * (weights[i] / totalWeight);
+      weightedMargins.push(weightedMargin);
+    }
+
+    const currBudget = await fetchCurrBudget(ad);
+    const weightedAverageProfitMargin = weightedMargins.reduce(
+      (a, b) => a + b,
+      0
+    );
+    const mostRecentProfitMargin = profitMargins.slice([-1]);
+    let nextBudget =
+      Math.round((1 + weightedAverageProfitMargin) * currBudget * 100) / 100;
+
+    if (mostRecentProfitMargin > 0) {
+      nextBudget = Math.max(currBudget, nextBudget);
+    }
+
+    adInsights[ad]["recommenedBudget"] = nextBudget;
+    adInsights[ad]["currentBudget"] = currBudget;
   }
   return adInsights;
 }
 
-addCurrBudget().then((insights) => console.log(insights));
+computeNewBudget().then((insights) => console.log(insights));
+
+async function fetchCurrBudget(ad_id) {
+  url = budgetsBaseIrl.concat(ad_id, accessToken);
+  const budget = await fetchAdMetrics(url);
+  return budget.budget;
+}
+
+// addCurrBudget().then((insights) => console.log(insights));
 
 //   "ad_id": {
 //     "weighted_average_profit_margin": "int",
