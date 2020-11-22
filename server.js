@@ -1,8 +1,8 @@
-// const express = require("express");
+const express = require("express");
 
 const fetch = require("node-fetch");
 
-// const app = express();
+const app = express();
 
 const metricsBaseUrl = "https://interview-api.sbly.com/ad-insights?";
 const budgetsBaseIrl = "https://interview-api.sbly.com/ad/";
@@ -15,6 +15,12 @@ let dates = [
   "2020-01-04",
   "2020-01-05",
 ];
+
+app.get("/api/budgets", (req, res) => {
+  recommenedBudget().then((insights) => {
+    res.json(insights);
+  });
+});
 
 function createParams() {
   let params = [];
@@ -62,14 +68,14 @@ async function buildInsights() {
   return adInsights;
 }
 
-async function fetchCurrBudget(ad_id) {
-  url = budgetsBaseIrl.concat(ad_id, accessToken);
+async function fetchCurrBudget(adId) {
+  url = budgetsBaseIrl.concat(adId, accessToken);
   try {
     const budget = await fetchAdMetrics(url);
+    return budget.budget;
   } catch (err) {
     console.log(err);
   }
-  return budget.budget;
 }
 
 function caculateMarginWeight(adId, adInsight) {
@@ -100,35 +106,45 @@ function caculateNewBudget(profitMargins, weights, currBudget) {
     weightedMargins.push(weightedMargin);
   }
 
-  const weightedAverageProfitMargin = weightedMargins.reduce(
-    (a, b) => a + b,
-    0
-  );
+  const weightedAverageProfitMargin =
+    Math.round(weightedMargins.reduce((a, b) => a + b, 0) * 100) / 100;
 
   const nextBudget =
     Math.round((1 + weightedAverageProfitMargin) * currBudget * 100) / 100;
 
-  return nextBudget;
+  return [weightedAverageProfitMargin, nextBudget];
 }
 
-async function addNewBudget() {
+async function recommenedBudget() {
   let adInsights = await buildInsights();
+  let adInsightsBudgets = [];
 
   for (ad in adInsights) {
     [profitMargins, weights] = caculateMarginWeight(ad, adInsights[ad]);
 
     const mostRecentProfitMargin = profitMargins.slice([-1]);
     const currBudget = await fetchCurrBudget(ad);
-    let nextBudget = caculateNewBudget(profitMargins, weights, currBudget);
+    let [weightedAverageProfitMargin, proposedBudget] = caculateNewBudget(
+      profitMargins,
+      weights,
+      currBudget
+    );
 
     if (mostRecentProfitMargin > 0) {
-      nextBudget = Math.max(currBudget, nextBudget);
+      proposedBudget = Math.max(currBudget, proposedBudget);
     }
 
-    adInsights[ad]["recommenedBudget"] = nextBudget;
-    adInsights[ad]["currentBudget"] = currBudget;
+    adInsightBudget = {
+      id: ad,
+      weightedAverageProfitMargin: weightedAverageProfitMargin,
+      currentBudget: currBudget,
+      proposedBudget: proposedBudget,
+    };
+    adInsightsBudgets.push(adInsightBudget);
   }
-  return adInsights;
+  return adInsightsBudgets;
 }
 
-addNewBudget().then((insights) => console.log(insights));
+const port = 5000;
+
+app.listen(port, () => `Server running on port ${port}`);
